@@ -1,0 +1,187 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+title "Микросервисная архитектура GoFuture с поддержкой обратной совместимости с монолитом"
+
+
+AddRelTag("deprecated", $lineThickness = 3, $lineStyle = DashedLine(), $textColor = $ARROW_COLOR, $lineColor = "grey")
+
+Boundary(persons, 'Акторы') {
+    Person(passenger, "Пассажир", "Заказывает поездки")
+    Person(driver, "Водитель", "Принимает заказы и получает выплаты")
+    Person(manager, "Корпоративный менеджер", "Управляет счетами")
+    Person(accountant, "Бухгалтер", "Контролирует выплаты")
+    Person(dev_engineer, "Разработчик", "Разрабатывает новые функции")
+    Person(sre_engineer, "SRE инженер", "Мониторит и поддерживает систему")
+}
+
+Boundary(ext_systems, 'Внешние системы') {
+    System_Ext(yandex_pay, "Яндекс.Пэй", "Платежный шлюз")
+    System_Ext(yandex_maps, "Яндекс.Карты", "Картографический сервис")
+    System_Ext(bank_api, "API Банка", "Банковские выплаты")
+    System_Ext(push_services, "Push-сервисы", "Google, Apple, Huawei")
+    System_Ext(partners_system, "Внешняя система партнёров")
+}
+
+Boundary(clients, "Клиенты") {
+    Container(web_passenger, "Пассажирское приложение", "iOS/Android/Huawei", "Интерфейс для пассажиров")
+    Container(web_driver, "Водительское приложение", "iOS/Android/Huawei", "Интерфейс для водителей")
+    Container(web_portal, "Корпоративный веб-портал", "Web Application", "Управление заказами")
+    Container(admin_portal, "Админ-панель", "Web Application", "Управление выплатами")
+}
+
+System_Boundary(go_future_system, "GoFuture Platform") {
+    Container(bff_web_passenger, "BFF пассажирского приложения")
+    Container(bff_web_driver, "BFF водительского приложения")
+    Container(bff_web_portal, "BFF корпоративного портала")
+    Container(bff_admin_portal, "BFF административного портала")
+    Container(bff_external_api, "BFF для внешнего API")
+
+    Container(api_gateway, "API Gateway")
+
+    Boundary(microservices, "Пул микросервисов") {
+        Container(iam, "IAM сервис")
+        Container(booking, "Микросервис бронирования")
+        Container(billing, "Биллинг")
+        Container(notifications, "Микросервис уведомлений")
+        Container(analytics, "Аналитический модуль")
+        Container(antifraud, "Антифрод")
+    }
+
+    ContainerQueue(kafka, "Брокер сообщений", "Kafka", "EDA")
+    ContainerDb(db_search, "Поисковый индекс", "Elasticsearch", "Геопоиск водителей")
+
+    Container(acl, "Anti Corruption Layer")
+
+    Boundary(deprecated, "Контейнеры для удаления после завершения миграции") {
+        Container(app_monolith, "GoFuture Monolith", "Django Application", "Содержит всю бизнес-логику")
+        ContainerDb(db_main, "Основная БД", "PostgreSQL RDS", "Хранит все бизнес-данные")
+        ContainerDb(db_cache, "In-memory кэш", "Redis", "Кэширование данных")
+        ContainerQueue(mq_broker, "Брокер сообщений", "RabbitMQ", "Очередь для фоновых задач")
+        Container(app_worker, "Воркеры фоновых задач", "Celery", "Обработка асинхронных задач")
+    }
+
+    Boundary(auxiliary, "DevOps контейнеры") {
+        ' ### МОНИТОРИНГ И OBSERVABILITY ###
+        Container(monitoring, "Prometheus", "Monitoring System", "Сбор метрик и мониторинг")
+        Container(grafana, "Grafana", "Dashboard System", "Визуализация метрик и дашборды")
+        Container(loki, "Loki", "Log Aggregation", "Сбор и анализ логов")
+        Container(alert_manager, "Alertmanager", "Alert System", "Управление алертами")
+
+        ' ### CI/CD ИНФРАСТРУКТУРА ###
+        Container(jenkins, "Jenkins", "CI/CD Server", "Сборка и деплой монолита")
+        Container(artifact_repo, "Artifact Repository", "Docker Registry", "Хранение образов приложения")
+        Container(ci_worker, "CI/CD Workers", "VM/Containers", "Выполнение задач сборки и тестов")
+    }
+
+    Boundary(business_analytics, "Управление бизнес процессами") {
+        ' ### АНАЛИТИЧЕСКАЯ ИНФРАСТРУКТУРА ###
+        Container(analytics_engine, "Analytics Engine", "Spark/Flink", "Обработка аналитических данных")
+        Container(analytics_db, "Analytics DB", "ClickHouse", "Хранение аналитических данных")
+        Container(datalens, "DataLens", "BI Tool", "Визуализация бизнес-метрик")
+    }
+}
+
+' ### СВЯЗИ ПОЛЬЗОВАТЕЛЕЙ ###
+Rel(passenger, web_passenger, "Использует")
+Rel(driver, web_driver, "Использует")
+Rel(manager, web_portal, "Использует")
+Rel(accountant, admin_portal, "Использует")
+Rel(dev_engineer, jenkins, "Запускает сборки")
+Rel(sre_engineer, grafana, "Мониторит систему")
+Rel(sre_engineer, alert_manager, "Настраивает алерты")
+
+Rel(web_passenger, bff_web_passenger, "HTTP/REST API")
+Rel(web_driver, bff_web_driver, "HTTP/REST API")
+Rel(web_portal, bff_web_portal, "HTTP/REST API")
+Rel(admin_portal, bff_admin_portal, "HTTP/REST API")
+Rel(partners_system, bff_external_api, "HTTP/REST API", "Ограниченный доступ партнёров до API")
+
+Rel(bff_web_passenger, api_gateway, "Отправляет запросы", "REST API")
+Rel(bff_web_driver, api_gateway, "Отправляет запросы", "REST API")
+Rel(bff_web_portal, api_gateway, "Отправляет запросы", "REST API")
+Rel(bff_admin_portal, api_gateway, "Отправляет запросы", "REST API")
+Rel(bff_external_api, api_gateway, "Отправляет запросы", "REST API")
+
+Rel(api_gateway, iam, "Выполняет аутентификацию и авторизацию запросов")
+Rel(api_gateway, booking, "Отправляет запросы", "REST API")
+Rel(api_gateway, billing, "Отправляет запросы", "REST API")
+
+Rel(iam, kafka, "Пишет и читает события")
+Rel(booking, kafka, "Пишет и читает события")
+Rel(billing, kafka, "Пишет и читает события")
+Rel(notifications, kafka, "Пишет и читает события")
+Rel(analytics, kafka, "Пишет и читает события")
+Rel(antifraud, kafka, "Пишет и читает события")
+
+Rel(booking, db_search, "Геопоиск водителей")
+
+Rel(microservices, monitoring, "Метрики")
+Rel(microservices, loki, "Логи")
+Rel(microservices, artifact_repo, "Получает образы для запуска контейнеров")
+
+Rel(billing, yandex_pay, "Выполняет платежи")
+Rel(notifications, push_services, "Отправляет уведомления")
+
+Rel(kafka, monitoring, "Метрики")
+
+
+Rel(booking, db_search, "Геопоиск водителей")
+
+
+Rel(acl, kafka, "Пишет и читает события", $tags="deprecated")
+Rel(acl, app_monolith, "Согласовывает изменения между архитектурами", $tags="deprecated")
+Rel(app_monolith, acl, " ", $tags="deprecated")
+
+' ### БИЗНЕС-ЛОГИКА ###
+Rel(web_passenger, app_monolith, "HTTP/REST API", $tags="deprecated")
+Rel(web_driver, app_monolith, "HTTP/REST API", $tags="deprecated")
+Rel(web_portal, app_monolith, "HTTP/REST API", $tags="deprecated")
+Rel(admin_portal, app_monolith, "HTTP/REST API", $tags="deprecated")
+
+Rel(app_monolith, db_main, "Чтение/запись (ORM)")
+Rel(app_monolith, db_cache, "Кэширование данных")
+Rel(app_monolith, db_search, "Геопоиск водителей")
+Rel(app_monolith, mq_broker, "Отправка задач")
+
+Rel(app_monolith, yandex_pay, "Обработка платежей")
+Rel(app_monolith, yandex_maps, "Запросы геоданных")
+Rel(app_monolith, bank_api, "Инициирование выплат")
+
+' ### ASYNC WORKERS ###
+Rel(app_worker, mq_broker, "Получает задачи из", "AMQP")
+Rel(app_worker, db_main, "Чтение/запись данных", "ORM")
+Rel(app_worker, db_main, "Сохраняет результаты", "ORM")
+Rel(app_worker, bank_api, "Выполняет выплаты", "REST API")
+Rel(app_worker, push_services, "Отправляет уведомления", "REST API")
+
+' ### МОНИТОРИНГ ###
+Rel(app_monolith, monitoring, "Отправляет метрики", "Prometheus Metrics")
+Rel(app_worker, monitoring, "Отправляет метрики", "Prometheus Metrics")
+Rel(db_main, monitoring, "Метрики БД", "PostgreSQL Exporter")
+Rel(mq_broker, monitoring, "Метрики очередей", "RabbitMQ Exporter")
+
+Rel(monitoring, grafana, "Предоставляет данные", "PromQL")
+Rel(monitoring, alert_manager, "Отправляет алерты", "Alert Rules")
+Rel(alert_manager, sre_engineer, "Отправляет уведомления", "Email/Slack/Pager")
+
+Rel(app_monolith, loki, "Отправляет логи", "Loki Logs")
+Rel(app_worker, loki, "Отправляет логи", "Loki Logs")
+
+' ### CI/CD ###
+Rel(jenkins, ci_worker, "Запускает задачи", "SSH/API")
+Rel(ci_worker, artifact_repo, "Пушит образы", "Docker Push")
+Rel(jenkins, artifact_repo, "Деплоит образы", "Docker Pull")
+Rel(ci_worker, app_monolith, "Запускает тесты", "Test Execution")
+
+' ### АНАЛИТИКА ###
+Rel(app_monolith, analytics_engine, "Отправляет события", "AMQP")
+Rel(app_worker, analytics_engine, "Отправляет события", "AMQP")
+Rel(analytics_engine, analytics_db, "Записывает данные", "ETL Process")
+Rel(analytics_db,datalens, "Предоставляет данные", "SQL Queries")
+Rel(datalens, manager, "Бизнес-отчеты", "Dashboards")
+Rel(datalens, accountant, "Финансовые отчеты", "Dashboards")
+
+@enduml
