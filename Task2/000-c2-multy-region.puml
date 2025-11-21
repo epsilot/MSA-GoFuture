@@ -1,0 +1,66 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+title "Архитектура межрегионального взаимодействия GoFuture"
+
+
+System_Boundary(region_cis, "GoFuture CIS") {
+    ContainerQueue(kafka_cis, "Kafka. Партиции CIS региона")
+    Container(prometheus_cis, "Prometheus. CIS регион")
+    Container(alertmanager_cis, "Alertmanager. CIS регион")
+    Container(grafana_cis, "Grafana. CIS регион")
+
+    Boundary(monitoring_federated, "Общий мониторинг (CIS)") {
+        Container(prometheus_federated, "Prometheus. Federated")
+        Container(alertmanager_federated, "Alertmanager. Federated")
+        Container(grafana_federated, "Grafana. Federated")
+
+        AddBoundaryTag("implementation_note", $fontColor="#grey", $borderColor="lightgrey", $bgColor="lightgrey")
+        Boundary("implementation_note", "Можно вынести в изолированный кластер для надёжности", $tags="implementation_note")
+    }
+}
+
+System_Boundary(region_asia, "GoFuture Asia") {
+    ContainerQueue(kafka_asia, "Kafka. Партиции Asia региона")
+    Container(prometheus_asia, "Prometheus. Asia регион")
+    Container(alertmanager_asia, "Alertmanager. Asia регион")
+    Container(grafana_asia, "Grafana. Asia регион")
+}
+
+System_Boundary(region_latam, "GoFuture LATAM") {
+    ContainerQueue(kafka_latam, "Kafka. Партиции LATAM региона")
+    Container(prometheus_latam, "Prometheus. LATAM регион")
+    Container(alertmanager_latam, "Alertmanager. LATAM регион")
+    Container(grafana_latam, "Grafana. LATAM регион")
+}
+
+Rel(prometheus_federated, prometheus_cis, "Собирает агрегированные метрики")
+Rel(prometheus_federated, prometheus_asia, "Собирает агрегированные метрики")
+Rel(prometheus_federated, prometheus_latam, "Собирает агрегированные метрики")
+Rel(grafana_federated, prometheus_federated, "Запросы метрик (Глобальные дашборды)")
+
+Rel(prometheus_cis, kafka_cis, "Собирает метрики")
+Rel(prometheus_asia, kafka_asia, "Собирает метрики")
+Rel(prometheus_latam, kafka_latam, "Собирает метрики")
+
+Rel(prometheus_cis, alertmanager_cis, "Отправляет алерты командам ответственным за регион")
+Rel(prometheus_asia, alertmanager_asia, "Отправляет алерты командам ответственным за регион")
+Rel(prometheus_latam, alertmanager_latam, "Отправляет алерты командам ответственным за регион")
+
+Rel(grafana_cis, prometheus_cis, "Запросы метрик (Локальные дашборды)")
+Rel(grafana_asia, prometheus_asia, "Запросы метрик (Локальные дашборды)")
+Rel(grafana_latam, prometheus_latam, "Запросы метрик (Локальные дашборды)")
+
+Rel(alertmanager_cis, alertmanager_federated, "Перенаправляет глобальные/эскалированные алерты")
+Rel(alertmanager_asia, alertmanager_federated, "Перенаправляет глобальные/эскалированные алерты")
+Rel(alertmanager_latam, alertmanager_federated, "Перенаправляет глобальные/эскалированные алерты")
+
+
+Rel(kafka_cis, kafka_asia, "Перенаправляет/Реплицирует события в региональные партиции", "Private net")
+Rel(kafka_cis, kafka_latam, "Перенаправляет/Реплицирует события в региональные партиции", "Private net")
+Rel(kafka_asia, kafka_latam, "Перенаправляет/Реплицирует события в региональные партиции", "Private net")
+
+
+@enduml
