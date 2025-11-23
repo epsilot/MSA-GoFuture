@@ -1,0 +1,59 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+title "Архитектура межрегионального взаимодействия GoFuture"
+
+AddRelTag("error", $lineThickness = 3, $lineStyle = DashedLine(), $textColor = "red", $lineColor = "red")
+
+Boundary(scene1, "Сценарий нормальной работы") {
+    Person(user1, "Пользователь CIS")
+
+    System_Ext(geo1, "GeoDNS")
+
+    System_Boundary(region_cis1, "GoFuture CIS") {
+        Container(balancer_cis1, "Балансер CIS")
+    }
+
+    System_Boundary(region_asia1, "GoFuture Asia") {
+        Container(balancer_asia1, "Балансер Asia")
+    }
+
+    System_Boundary(region_latam1, "GoFuture LATAM") {
+        Container(balancer_latam1, "Балансер Latam")
+    }
+
+    Rel(user1, geo1, "Шаг 1. Запрос IP ближайщего региона")
+    Rel(user1, balancer_cis1, "Шаг 2. Отправляет запросы в балансер региона")
+    Rel(geo1, region_cis1, "Health check")
+    Rel(geo1, region_asia1, "Health check")
+    Rel(geo1, region_latam1, "Health check")
+}
+
+Boundary(scene2, "Сценарий выхода региона из строя") {
+    Person(user2, "Пользователь CIS")
+
+    System_Ext(geo2, "GeoDNS")
+
+    System_Boundary(region_cis2, "GoFuture CIS") {
+        Container(balancer_cis2, "Балансер CIS")
+    }
+
+    System_Boundary(region_asia2, "GoFuture Asia") {
+        Container(balancer_asia2, "Балансер Asia")
+    }
+
+    System_Boundary(region_latam2, "GoFuture LATAM") {
+        Container(balancer_latam2, "Балансер Latam")
+    }
+
+    Rel(user2, geo2, "Шаг 1. Запрос IP ближайщего региона")
+    Rel(user2, balancer_asia2, "Шаг 2. Отправляет запросы в балансер региона")
+    Rel(geo2, region_cis2, "Health check error", $tags="error")
+    Rel(geo2, region_asia2, "Health check")
+    Rel(geo2, region_latam2, "Health check")
+}
+
+
+@enduml
