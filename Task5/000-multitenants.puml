@@ -1,0 +1,37 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+
+title Мультитенантная платформа для подключения партнёров
+
+
+Person(partner, "Партнёр")
+Container(partners_panel, "Веб-интерфейс партнёра")
+Container(partners_app, "Партнёрское приложение")
+System_Boundary(go_future_system, "GoFuture Partners Platform") {
+
+    Container(onboarding_service, "Onboarding Service", "", "Оркестрация создания нового партнёра и выделения ресурсов")
+    Container(iam_server, "IAM сервер")
+    Container(config_db, "Конфигурационная БД", "PostgreSQL", "Хранит настройки, tenant_id")
+    Container(deployment_sys, "Система Развёртывания", "Terraform/Ansible", "Provisioning ресурсов")
+
+    Boundary(deployments_pool, "Пул серверов для партнёрских кластеров")
+
+    Container(proxy_gateway, "Прокси шлюз", "", "Перенаправляет партнёрский трафик в нужный кластер")
+
+    Container(prometheus, "Prometheus", "", "Собирает метрики из партнёрских кластеров")
+}
+
+Rel(partner, partners_panel, "Инициализирует запрос на создание")
+Rel(partner, partners_app, "Взаимодействует")
+Rel(partners_app, proxy_gateway, "Отправляет запросы", "REST")
+Rel(prometheus, deployments_pool, "Получает метрики из кластеров")
+Rel(partners_panel, onboarding_service, "1. Запрос на создание тенанта")
+Rel(onboarding_service, iam_server, "2. Создаёт группу и роли партнёра")
+Rel(onboarding_service, config_db, "3. Создаёт запись о новом tenant_id")
+Rel(onboarding_service, deployment_sys, "4. Инициирует развёртывание")
+Rel(deployment_sys, deployments_pool, "5. Выполняет развёртывание")
+Rel(deployment_sys, config_db, "6. Обновляет статус развёртывания")
+Rel(onboarding_service, proxy_gateway, "7. Открывает доступ для партнёра")
+
+@enduml
