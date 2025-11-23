@@ -1,0 +1,57 @@
+@startuml
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Component>
+
+title "Сбор данных для выполнения ценообразования"
+
+System_Boundary(go_future_system, "GoFuture Platform") {
+    Boundary(microservices, "Пул микросервисов") {
+        Container(booking, "Микросервис бронирования")
+        Container(otger_services, "Остальные микросервисы")
+    }
+
+    ContainerQueue(kafka, "Брокер сообщений", "Kafka", "EDA")
+
+    Boundary(data_platform, "Платформа данных") {
+        Container(kafka_connect, "Kafka Connect")
+        ContainerDb(feature_store, "Feature Store", "Redis", "Кэш для признаков в реальном времени")
+        ContainerDb(data_lake, "Data Lake/Warehouse", "", "Хранилище сырых и исторических данных")
+    }
+
+    Boundary(ml_platform, "ML-платформа") {
+        Container(ml_train, "ML Training Pipeline", "", "Тренировка моделей (на данных из Data Lake)")
+        Container(ml_serving, "ML Serving Layer", "Python", "API для инференса моделей")
+    }
+
+    Boundary(business_analytics, "Управление бизнес процессами") {
+        Container(analytics_engine, "Analytics Engine", "Spark/Flink", "Обработка аналитических данных")
+        Container(analytics_db, "Analytics DB", "ClickHouse", "Хранение аналитических данных")
+        Container(datalens, "DataLens", "BI Tool", "Визуализация бизнес-метрик")
+    }
+}
+
+Rel(booking, kafka, "Пишет события NewBookingRequestCreated")
+Rel(booking, kafka, "Читает события PriceCalculated")
+Rel(ml_serving, kafka, "Пишет события PriceCalculated")
+Rel(ml_serving, kafka, "Читает события NewBookingRequestCreated")
+
+Rel(analytics_engine, analytics_db, "Записывает данные", "ETL Process")
+Rel(analytics_db, datalens, "Предоставляет данные", "SQL Queries")
+
+
+
+
+Rel(kafka, kafka_connect, "Потоковая передача сырых событий")
+Rel(kafka_connect, data_lake, "Записывает сырые данные")
+Rel(kafka_connect, feature_store, "Записывает обработанные признаки")
+Rel(analytics_engine, kafka, "Читает события")
+Rel(analytics_engine, data_lake, "Читает сырые данные")
+
+Rel(ml_train, data_lake, "Читает данные для тренировки")
+Rel(ml_train, ml_serving, "Деплоит обученную модель")
+Rel(ml_serving, feature_store, "Читает признаки для предсказания")
+
+Rel(kafka, analytics_engine, "Читает поток событий")
+
+@enduml
